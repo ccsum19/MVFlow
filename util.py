@@ -28,6 +28,43 @@ def save_video_frames(video_path, img_size=(512,512)):
         image_resized = image.resize((img_size),  resample=Image.Resampling.LANCZOS)
         image_resized.save(f'data/{video_name}/{ind}.png')
 
+def parse_index_spec(spec):
+    if spec is None:
+        return None
+    if isinstance(spec, (list, tuple)):
+        return [int(x) for x in spec]
+    if isinstance(spec, int):
+        return [spec]
+    if isinstance(spec, str) and os.path.isfile(spec):
+        with open(spec, "r") as f:
+            spec = f.read().strip()
+    if not isinstance(spec, str):
+        raise ValueError(f"Unsupported index spec type: {type(spec)}")
+    tokens = [tok.strip() for tok in spec.replace("\n", ",").split(",") if tok.strip()]
+    indices = []
+    for token in tokens:
+        if "-" in token:
+            start, end = token.split("-", 1)
+            start = int(start.strip())
+            end = int(end.strip())
+            step = 1 if end >= start else -1
+            indices.extend(list(range(start, end + step, step)))
+        else:
+            indices.append(int(token))
+    return indices
+
+def get_image_paths(data_path, n_frames, view_indices=None):
+    view_indices = parse_index_spec(view_indices)
+    if view_indices is None:
+        view_indices = list(range(n_frames))
+    paths = []
+    for idx in view_indices:
+        path = os.path.join(data_path, "%05d.png" % idx)
+        if not os.path.exists(path):
+            path = os.path.join(data_path, "%05d.jpg" % idx)
+        paths.append(path)
+    return paths
+
 def add_dict_to_yaml_file(file_path, key, value):
     data = {}
 
@@ -101,5 +138,3 @@ def seed_everything(seed):
     torch.cuda.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
-
-

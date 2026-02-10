@@ -8,6 +8,7 @@ data_path: 'wolf-part'
 latents_path: 'latents' # should be the same as 'save_dir' arg used in preprocess
 n_inversion_steps: 100 # for retrieving the latents of the inversion
 n_frames: 40
+view_indices: null # optional: "0,2,5-9" or path to a text file with indices
 
 # diffusion
 sd_version: '2.1'

@@ -13,7 +13,7 @@ from diffusers import DDIMScheduler, StableDiffusionPipeline
 import numpy as np
 
 from tokenflow_utils import *
-from util import save_video, seed_everything
+from util import get_image_paths, parse_index_spec, save_video, seed_everything
 
 # suppress partial model loading warning
 logging.set_verbosity_error()
@@ -58,12 +58,20 @@ class TokenFlow(nn.Module):
         print('SD model loaded')
 
         # data
+        self.view_indices = parse_index_spec(config.get("view_indices"))
+        if self.view_indices is not None:
+            self.config["n_frames"] = len(self.view_indices)
         self.latents_path = self.get_latents_path()
-        self.keyframes_path = [os.path.join(config["data_path"], "%05d.jpg" % idx) for idx in
-                               range(self.config["n_frames"])]
-        if not os.path.exists(self.keyframes_path[0]):
-            self.keyframes_path = [os.path.join(config["data_path"], "%05d.png" % idx) for idx in
-                                   range(self.config["n_frames"])]
+        self.latent_indices = (
+            torch.tensor(self.view_indices, dtype=torch.long)
+            if self.view_indices is not None
+            else torch.arange(self.config["n_frames"])
+        )
+        self.keyframes_path = get_image_paths(
+            config["data_path"],
+            self.config["n_frames"],
+            view_indices=self.view_indices,
+        )
         # load frames
         self.frames, self.latents, self.eps = self.get_data()
 
@@ -139,7 +147,7 @@ class TokenFlow(nn.Module):
         # encode to latents
         latents = self.encode_imgs(frames, deterministic=True).to(torch.float16).to(self.device)
         # get noise
-        eps = self.get_ddim_eps(latents, range(self.config["n_frames"])).to(torch.float16).to(self.device)
+        eps = self.get_ddim_eps(latents, self.latent_indices).to(torch.float16).to(self.device)
         return frames, latents, eps
 
     def get_ddim_eps(self, latent, indices):
@@ -197,7 +205,7 @@ class TokenFlow(nn.Module):
         self.init_method()
         noise = self.eps if config["use_ddim_noise"] else torch.randn_like(self.eps[[0]]).repeat(self.eps.shape[0])
         noisy_latents = self.scheduler.add_noise(self.latents, noise, self.scheduler.timesteps[0])
-        edited_frames = self.sample_loop(noisy_latents, torch.arange(self.config["n_frames"]))
+        edited_frames = self.sample_loop(noisy_latents, self.latent_indices)
         save_video(edited_frames, f'{self.config["output_path"]}/tokenflow_SDEdit_fps_10.mp4')
         save_video(edited_frames, f'{self.config["output_path"]}/tokenflow_SDEdit_fps_20.mp4', fps=20)
         save_video(edited_frames, f'{self.config["output_path"]}/tokenflow_SDEdit_fps_30.mp4', fps=30)
@@ -218,7 +226,7 @@ class TokenFlow(nn.Module):
     def per_frame_sde(self):
         os.makedirs(f'{self.config["output_path"]}/img_ode', exist_ok=True)
         noisy_latents = self.scheduler.add_noise(self.latents,  self.eps, self.scheduler.timesteps[0])
-        edited_frames = self.vanilla_sample_loop(noisy_latents, torch.arange(self.config["n_frames"]))
+        edited_frames = self.vanilla_sample_loop(noisy_latents, self.latent_indices)
         save_video(edited_frames, f'{self.config["output_path"]}/vanilla_sde.mp4')
         save_video(edited_frames, f'{self.config["output_path"]}/vanilla_sde_fps20.mp4', fps=20)
         save_video(edited_frames, f'{self.config["output_path"]}/vanilla_sde_fps30.mp4', fps=30)

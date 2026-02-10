@@ -55,7 +55,11 @@ class Preprocess(nn.Module):
                                                           torch_dtype=torch.float16).to(self.device)
         self.unet = UNet2DConditionModel.from_pretrained(model_key, subfolder="unet", revision="fp16",
                                                    torch_dtype=torch.float16).to(self.device)
-        self.paths, self.frames, self.latents = self.get_data(opt.data_path, opt.n_frames)
+        self.paths, self.frames, self.latents = self.get_data(
+            opt.data_path,
+            opt.n_frames,
+            view_indices=getattr(opt, "view_indices", None),
+        )
         
         if self.sd_version == 'ControlNet':
             from diffusers import ControlNetModel, StableDiffusionControlNetPipeline
@@ -181,11 +185,9 @@ class Preprocess(nn.Module):
         latents = torch.cat(latents)
         return latents
 
-    def get_data(self, frames_path, n_frames):
+    def get_data(self, frames_path, n_frames, view_indices=None):
         # load frames
-        paths =  [f"{frames_path}/%05d.png" % i for i in range(n_frames)]
-        if not os.path.exists(paths[0]):
-            paths = [f"{frames_path}/%05d.jpg" % i for i in range(n_frames)]
+        paths = get_image_paths(frames_path, n_frames, view_indices=view_indices)
         self.paths = paths
         frames = [Image.open(path).convert('RGB') for path in paths]
         if frames[0].size[0] == frames[0].size[1]:
@@ -302,7 +304,8 @@ def prep(opt):
 
     seed_everything(1)
 
-    save_path = os.path.join(opt.save_dir,
+    save_path = os.path.join(
+                             opt.save_dir,
                              f'sd_{opt.sd_version}',
                              Path(opt.data_path).stem,
                              f'steps_{opt.steps}',
@@ -346,9 +349,19 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=40)
     parser.add_argument('--save_steps', type=int, default=50)
     parser.add_argument('--n_frames', type=int, default=40)
+    parser.add_argument('--view_indices', type=str, default=None,
+                        help='comma-separated indices or ranges (e.g., "0,2,5-9"). '
+                             'Can also be a path to a text file containing the spec.')
     parser.add_argument('--inversion_prompt', type=str, default='a woman running')
     opt = parser.parse_args()
-    video_path = opt.data_path
-    save_video_frames(video_path, img_size=(opt.W, opt.H))
-    opt.data_path = os.path.join('data', Path(video_path).stem)
+    if os.path.isdir(opt.data_path):
+        opt.data_path = opt.data_path.rstrip("/")
+    else:
+        video_path = opt.data_path
+        save_video_frames(video_path, img_size=(opt.W, opt.H))
+        opt.data_path = os.path.join('data', Path(video_path).stem)
+    if opt.view_indices is not None:
+        indices = parse_index_spec(opt.view_indices)
+        opt.n_frames = len(indices)
+        opt.view_indices = indices
     prep(opt)
