@@ -41,8 +41,7 @@ pip install -r requirements.txt
 
 Preprocess you video by running using the following command:
 ```
-python preprocess.py --data_path <data/myvideo.mp4> \
-                     --inversion_prompt <'' or a string describing the video content>
+python preprocess.py --data_path data/elephant --n_frames 21 --sd_version 2.1 --steps 500 --save_dir latents --inversion_prompt "a shiny silver robotic elephant" 
 ```
 Additional arguments:
 ```
@@ -69,7 +68,7 @@ The video reconstruction will be saved as inverted.mp4. A good reconstruction is
 To edit your video, first create a yaml config as in ``configs/config_pnp.yaml``.
 Then run 
 ```
-python run_tokenflow_pnp.py
+python run_tokenflow_pnp.py --config_path configs/config_pnp.yaml 
 ```
 
 Similarly, if you want to use ControlNet or SDEedit, create a yaml config as in ``config/config_controlnet.yaml`` or ```configs/config_SDEdit.yaml``` and run ```python run_tokenflow_controlnet.py``` or ``python run_tokenflow_SDEdit.py`` respectivly.
